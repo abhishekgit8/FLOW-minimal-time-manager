@@ -105,7 +105,7 @@ export default function TasksPage() {
     const results = await Promise.all(updates)
     const err = results.find(r => r.error)
     if (err) {
-      console.error('Save order failed:', err.error.message)
+      console.error('Save order failed:', err.error?.message)
       return
     }
     setTasks(reordered)
