@@ -46,7 +46,7 @@ function Inner({ children }: { children: ReactNode }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <nav className="desktop-nav" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 24, paddingRight: 24, paddingTop: 12, paddingBottom: 12, position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--bg) 85%, transparent)' }}>
-        <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 700, letterSpacing: 4, color: 'var(--text)', textDecoration: 'none' }}>FLOW</Link>
+        <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 700, letterSpacing: 4, color: 'var(--text)', textDecoration: 'none' }}>Flow</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 4, borderRadius: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
           {tabs.map(t => (
             <Link key={t.href} href={t.href} style={{
