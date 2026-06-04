@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, ReactNode } from 'react'
+import { useEffect, useState, useRef, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, ListTodo, Clock, User, Settings, X, Minus, Maximize2, Minimize2 } from 'lucide-react'
+import { Home, ListTodo, Clock, User, Settings, X, Minus, Maximize2, Minimize2, Calendar } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { FocusTaskProvider, useFocusTask } from '@/components/focus-task-provider'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 export default function DashLayout({ children }: { children: ReactNode }) {
   return <FocusTaskProvider><Inner>{children}</Inner></FocusTaskProvider>
@@ -62,7 +63,7 @@ function Inner({ children }: { children: ReactNode }) {
 
       <div style={{ maxWidth: 512, marginLeft: 'auto', marginRight: 'auto', paddingLeft: 16, paddingRight: 16 }}>
         <div style={{ paddingTop: 16 }}>
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </div>
 
@@ -93,6 +94,7 @@ function Inner({ children }: { children: ReactNode }) {
 
 /* ===== TIMER WIDGET ===== */
 function TimerWidget({ userId }: { userId: string }) {
+  const [breakMin, setBreakMin] = useState(5)
   const [timeLeft, setTimeLeft] = useState(25 * 60)
   const [inputMin, setInputMin] = useState('25')
   const [inputSec, setInputSec] = useState('00')
@@ -100,6 +102,7 @@ function TimerWidget({ userId }: { userId: string }) {
   const [running, setRunning] = useState(false)
   const [view, setView] = useState<'widget' | 'minimized' | 'hidden' | 'fullscreen'>('widget')
   const ref = useRef<NodeJS.Timeout | null>(null)
+  const tickRef = useRef<number>(0)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const { focusTask, setFocusTask } = useFocusTask()
@@ -108,49 +111,207 @@ function TimerWidget({ userId }: { userId: string }) {
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
   const widgetRef = useRef<HTMLDivElement>(null)
+  const [calendarConnected, setCalendarConnected] = useState(false)
+  const [addToCalendar, setAddToCalendar] = useState(false)
+  const [calendarMsg, setCalendarMsg] = useState('')
+  const calendarMsgRef = useRef<NodeJS.Timeout | null>(null)
+  const modeRef = useRef(mode)
+  const inputMinRef = useRef(inputMin)
+  const userIdRef = useRef(userId)
+  const justCompletedRef = useRef(false)
+  const breakMinRef = useRef(breakMin)
 
-  const totalTime = mode === 'focus' ? (parseInt(inputMin) || 25) * 60 + (parseInt(inputSec) || 0) : 5 * 60
+  // Persist timer state
+  const persistTimer = (data: { timeLeft: number; inputMin: string; inputSec: string; mode: 'focus' | 'break'; running: boolean; breakMin: number }) => {
+    try { localStorage.setItem('flow_timer', JSON.stringify(data)) } catch {}
+  }
+
+  // Restore timer state
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('flow_timer')
+      if (saved) {
+        const d = JSON.parse(saved)
+        if (d.running && d.endTime && Date.now() < d.endTime) {
+          const elapsed = Math.floor((d.endTime - Date.now()) / 1000)
+          setTimeLeft(Math.max(0, d.timeLeft - (d.timeLeft - elapsed)))
+          setMode(d.mode)
+          setInputMin(d.inputMin)
+          setInputSec(d.inputSec)
+          if (d.breakMin) { setBreakMin(d.breakMin); breakMinRef.current = d.breakMin }
+          setRunning(true)
+        } else {
+          setTimeLeft(d.timeLeft || 25 * 60)
+          setMode(d.mode || 'focus')
+          setInputMin(d.inputMin || '25')
+          setInputSec(d.inputSec || '00')
+          if (d.breakMin) { setBreakMin(d.breakMin); breakMinRef.current = d.breakMin }
+        }
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+  useEffect(() => { inputMinRef.current = inputMin }, [inputMin])
+  useEffect(() => { userIdRef.current = userId }, [userId])
+  useEffect(() => { breakMinRef.current = breakMin }, [breakMin])
+
+  // Calendar status check
+  useEffect(() => {
+    const check = () => fetch('/api/calendar/status').then(r => r.json()).then(d => {
+      setCalendarConnected(prev => {
+        if (prev && !d.connected) setAddToCalendar(false)
+        return d.connected
+      })
+    }).catch(() => setCalendarConnected(false))
+    check()
+    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [focusTask?.id])
+
+  useEffect(() => {
+    if (focusTask) {
+      const saved = localStorage.getItem(`flow_cal_${focusTask.id}`)
+      setAddToCalendar(!!saved)
+    } else {
+      setAddToCalendar(false)
+    }
+    setCalendarMsg('')
+  }, [focusTask?.id])
+
+  const toggleAddToCalendar = async () => {
+    const next = !addToCalendar
+    if (!focusTask) return
+
+    if (next) {
+      setAddToCalendar(true)
+      const duration = parseInt(inputMin) || 25
+      const res = await fetch('/api/calendar/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskName: focusTask.name, startTime: new Date().toISOString(), duration }),
+      })
+      const data = await res.json()
+      if (data.eventId) {
+        localStorage.setItem(`flow_cal_${focusTask.id}`, data.eventId)
+        setCalendarMsg('Added to calendar')
+      } else {
+        setAddToCalendar(false)
+        setCalendarMsg(data.error || 'Failed to add')
+      }
+    } else {
+      const eventId = localStorage.getItem(`flow_cal_${focusTask.id}`)
+      if (eventId) {
+        const res = await fetch('/api/calendar/events', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId }),
+        })
+        const data = await res.json()
+        if (data.success) {
+          localStorage.removeItem(`flow_cal_${focusTask.id}`)
+          setAddToCalendar(false)
+          setCalendarMsg('Removed from calendar')
+        } else {
+          setCalendarMsg(data.error || 'Failed to remove')
+        }
+      } else {
+        setAddToCalendar(false)
+      }
+    }
+    if (calendarMsgRef.current) clearTimeout(calendarMsgRef.current)
+    calendarMsgRef.current = setTimeout(() => setCalendarMsg(''), 2000)
+  }
+
+  useEffect(() => () => { if (calendarMsgRef.current) clearTimeout(calendarMsgRef.current) }, [])
+
+  const totalTime = mode === 'focus' ? (parseInt(inputMin) || 25) * 60 + (parseInt(inputSec) || 0) : breakMin * 60
+
+  // Timer with drift correction
+  useEffect(() => {
     if (running && timeLeft > 0) {
+      tickRef.current = Date.now()
       ref.current = setInterval(() => {
+        const now = Date.now()
+        const drift = Math.floor((now - tickRef.current) / 1000)
+        tickRef.current = now
         setTimeLeft(p => {
-          if (p <= 1) {
+          const next = p - Math.max(1, drift)
+          if (next <= 0) {
             clearInterval(ref.current!)
             setRunning(false)
-            complete()
+            justCompletedRef.current = true
+            persistTimer({ timeLeft: 0, inputMin: inputMinRef.current, inputSec: '00', mode: modeRef.current, running: false, breakMin: breakMinRef.current })
             return 0
           }
-          document.title = `${fmt(p - 1)} — Flow`
-          return p - 1
+          document.title = `${fmt(next)} — Flow`
+          return next
         })
       }, 1000)
     }
     return () => { if (ref.current) clearInterval(ref.current) }
   }, [running])
 
-  const complete = useCallback(async () => {
-    document.title = 'Flow — Time Manager'
-    if (mode === 'focus' && userId) {
-      const s = createClient()
-      const mins = parseInt(inputMin) || 25
-      await s.from('pomodoro_sessions').insert({ user_id: userId, duration: mins, completed_at: new Date().toISOString() })
+  // Persist on state change
+  useEffect(() => {
+    if (!running && !justCompletedRef.current) {
+      persistTimer({ timeLeft, inputMin, inputSec, mode, running: false, breakMin })
     }
-    setMode(mode === 'focus' ? 'break' : 'focus')
-    if (mode === 'focus') {
-      setTimeLeft(5 * 60)
-      setInputMin('5')
+  }, [timeLeft, inputMin, inputSec, mode, breakMin])
+
+  useEffect(() => {
+    if (running) persistTimer({ timeLeft, inputMin, inputSec, mode, running: true, breakMin })
+  }, [running])
+
+  // Pause on page hide
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden' && running) {
+        persistTimer({ timeLeft, inputMin, inputSec, mode, running: true, breakMin })
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [running, timeLeft, inputMin, inputSec, mode, breakMin])
+
+  // Completion effect
+  useEffect(() => {
+    if (!justCompletedRef.current) return
+    justCompletedRef.current = false
+    const currentMode = modeRef.current
+    const currentUserId = userIdRef.current
+    const currentInputMin = inputMinRef.current
+    const currentBreakMin = breakMinRef.current
+    document.title = 'Flow — Time Manager'
+    if (currentMode === 'focus' && currentUserId) {
+      const s = createClient()
+      const mins = parseInt(currentInputMin) || 25
+      s.from('pomodoro_sessions').insert({ user_id: currentUserId, duration: mins, completed_at: new Date().toISOString() })
+    }
+    if (currentMode === 'focus') {
+      setMode('break')
+      setTimeLeft(currentBreakMin * 60)
+      setInputMin(String(currentBreakMin))
       setInputSec('00')
     } else {
-      const m = parseInt(inputMin) || 25
+      const m = parseInt(currentInputMin) || 25
+      setMode('focus')
       setTimeLeft(m * 60)
       setInputMin(String(m))
       setInputSec('00')
     }
-  }, [mode, userId, inputMin])
+    localStorage.removeItem('flow_timer')
+  }, [timeLeft])
 
   const toggle = () => {
-    if (running) { setRunning(false); document.title = 'Flow — Time Manager' } else setRunning(true)
+    if (running) {
+      setRunning(false); document.title = 'Flow — Time Manager'
+    } else {
+      setRunning(true)
+    }
   }
 
   const reset = () => {
@@ -160,10 +321,11 @@ function TimerWidget({ userId }: { userId: string }) {
       const m = parseInt(inputMin) || 25
       setTimeLeft(m * 60)
     } else {
-      setTimeLeft(5 * 60)
-      setInputMin('5')
+      setTimeLeft(breakMin * 60)
+      setInputMin(String(breakMin))
       setInputSec('00')
     }
+    localStorage.removeItem('flow_timer')
   }
 
   const applyTimeInput = (mStr: string, sStr: string) => {
@@ -182,7 +344,7 @@ function TimerWidget({ userId }: { userId: string }) {
       const mins = parseInt(inputMin) || 25
       setTimeLeft(mins * 60)
     } else {
-      setTimeLeft(5 * 60)
+      setTimeLeft(breakMin * 60)
     }
   }
 
@@ -342,6 +504,18 @@ function TimerWidget({ userId }: { userId: string }) {
         </div>
       )}
 
+      {/* Add to Calendar */}
+      {calendarConnected && focusTask && mode === 'focus' && (
+        <div onClick={e => e.stopPropagation()} style={{ margin: '0 12px', marginBottom: 8 }}>
+          <label style={{ padding: '5px 8px', borderRadius: 6, background: 'var(--bg)', fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={addToCalendar} onChange={toggleAddToCalendar} disabled={running} style={{ accentColor: 'var(--accent)', width: 12, height: 12 }} />
+            <Calendar size={10} style={{ color: 'var(--text-dim)' }} />
+            <span>{addToCalendar ? 'Added to Calendar' : 'Add to Google Calendar'}</span>
+          </label>
+          {calendarMsg && <p style={{ fontSize: 9, color: calendarMsg.includes('Failed') ? 'var(--danger)' : 'var(--accent)', marginTop: 2, paddingLeft: 8 }}>{calendarMsg}</p>}
+        </div>
+      )}
+
       {/* Timer Display */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingLeft: 12, paddingRight: 12, paddingBottom: 4 }}>
         <div style={{ position: 'relative', width: 120, height: 120, marginBottom: 6 }}>
@@ -358,12 +532,23 @@ function TimerWidget({ userId }: { userId: string }) {
         {/* Direct Time Input */}
         {!running && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}
-            onClick={e => e.stopPropagation()}>
+            onClick={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}>
             <input type="number" value={inputMin} onChange={e => applyTimeInput(e.target.value, inputSec)}
               style={{ width: 40, height: 28, textAlign: 'center', borderRadius: 6, fontSize: 13, fontWeight: 500, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} min={0} max={999} />
             <span style={{ fontSize: 14, fontWeight: 300, color: 'var(--text-dim)' }}>:</span>
             <input type="number" value={inputSec} onChange={e => applyTimeInput(inputMin, e.target.value)}
               style={{ width: 40, height: 28, textAlign: 'center', borderRadius: 6, fontSize: 13, fontWeight: 500, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} min={0} max={59} />
+          </div>
+        )}
+        {!running && mode === 'break' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8, fontSize: 10, color: 'var(--text-dim)' }}
+            onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+            <span>Break:</span>
+            <input type="number" value={breakMin} onChange={e => { const v = Math.max(1, Math.min(30, parseInt(e.target.value) || 1)); setBreakMin(v); setTimeLeft(v * 60); setInputMin(String(v)); setInputSec('00') }}
+              style={{ width: 32, height: 22, textAlign: 'center', borderRadius: 4, fontSize: 10, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} min={1} max={30} />
+            <span>min</span>
           </div>
         )}
       </div>

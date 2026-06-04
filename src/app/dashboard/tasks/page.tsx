@@ -68,7 +68,9 @@ export default function TasksPage() {
   }
 
   const del = async (id: string) => {
-    await supabase.from('tasks').delete().eq('id', id)
+    if (!confirm('Delete this task? This cannot be undone.')) return
+    const { error } = await supabase.from('tasks').delete().eq('id', id)
+    if (error) return
     setTasks(tasks.filter(t => t.id !== id))
     if (focusTask?.id === id) setFocusTask(null)
   }

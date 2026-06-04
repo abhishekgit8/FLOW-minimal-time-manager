@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
-import { Sun, Moon, LogOut, User, Mail, ChevronRight } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Sun, Moon, LogOut, User, Mail, ChevronRight, Calendar, Unlink, Check } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 
 export default function SettingsPage() {
@@ -13,8 +13,13 @@ export default function SettingsPage() {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [calendarConnected, setCalendarConnected] = useState(false)
+  const [calendarLoading, setCalendarLoading] = useState(true)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const msgRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
 
@@ -22,6 +27,31 @@ export default function SettingsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) router.push('/login')
       else { setUser(user); setName(user.user_metadata?.full_name || ''); setLoading(false) }
+    })
+  }, [])
+
+  useEffect(() => {
+    const calendarStatus = searchParams.get('calendar')
+    if (calendarStatus === 'connected') {
+      setCalendarConnected(true)
+      setMsg('Google Calendar connected!')
+      if (msgRef.current) clearTimeout(msgRef.current)
+      msgRef.current = setTimeout(() => setMsg(''), 3000)
+      router.replace('/dashboard/settings')
+    } else if (calendarStatus === 'error') {
+      setMsg('Failed to connect calendar. Try again.')
+      if (msgRef.current) clearTimeout(msgRef.current)
+      msgRef.current = setTimeout(() => setMsg(''), 3000)
+      router.replace('/dashboard/settings')
+    }
+  }, [searchParams, router])
+
+  useEffect(() => { return () => { if (msgRef.current) clearTimeout(msgRef.current) } }, [])
+
+  useEffect(() => {
+    fetch('/api/calendar/status').then(r => r.json()).then(data => {
+      setCalendarConnected(data.connected)
+      setCalendarLoading(false)
     })
   }, [])
 
@@ -36,9 +66,17 @@ export default function SettingsPage() {
       setUser({ ...user, user_metadata: { ...user.user_metadata, full_name: name.trim() } })
       setEditingName(false)
       setMsg('Name updated!')
-      setTimeout(() => setMsg(''), 2000)
+      if (msgRef.current) clearTimeout(msgRef.current)
+      msgRef.current = setTimeout(() => setMsg(''), 2000)
     }
     setSaving(false)
+  }
+
+  const disconnectCalendar = async () => {
+    setDisconnecting(true)
+    const res = await fetch('/api/calendar/disconnect', { method: 'DELETE' })
+    if (res.ok) setCalendarConnected(false)
+    setDisconnecting(false)
   }
 
   if (loading) return <p style={{ textAlign: 'center', padding: '40px 0', fontSize: 13, color: 'var(--text-dim)' }}>Loading...</p>
@@ -110,6 +148,37 @@ export default function SettingsPage() {
             <Sun className="ico ico-sun" style={{ color: 'var(--text)' }} />
             <Moon className="ico ico-moon" style={{ color: 'var(--text)' }} />
           </button>
+        </div>
+      </div>
+
+      {/* Integrations */}
+      <div style={{ borderRadius: 16, marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+          <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-dim)', marginBottom: 4 }}>Integrations</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Calendar size={16} style={{ color: 'var(--text-dim)' }} />
+            <div>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Google Calendar</span>
+              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
+                {calendarConnected ? 'Write-only access — creates focus events' : 'Not connected'}
+              </p>
+            </div>
+          </div>
+          {calendarLoading ? (
+            <div style={{ width: 20, height: 20, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+          ) : calendarConnected ? (
+            <button onClick={disconnectCalendar} disabled={disconnecting}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 500, background: 'none', border: '1px solid var(--border)', color: 'var(--danger)', cursor: 'pointer', opacity: disconnecting ? 0.5 : 1 }}>
+              <Unlink size={12} /> {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+            </button>
+          ) : (
+            <a href="/api/calendar/connect"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 500, background: 'var(--accent)', color: 'var(--bg)', border: 'none', cursor: 'pointer', textDecoration: 'none' }}>
+              <Check size={12} /> Connect
+            </a>
+          )}
         </div>
       </div>
 

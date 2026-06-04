@@ -74,6 +74,21 @@ export default function HomePage() {
 
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
 
+  if (!user) return (
+    <div style={{ paddingBottom: 96 }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ height: 28, width: 200, borderRadius: 6, background: 'var(--surface)', marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        <div style={{ height: 16, width: 160, borderRadius: 4, background: 'var(--surface)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: '0.1s' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} style={{ height: 80, borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 0.1}s` }} />
+        ))}
+      </div>
+      <style>{`@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }`}</style>
+    </div>
+  )
+
   return (
     <div style={{ paddingBottom: 96 }}>
       {/* Greeting */}

@@ -15,20 +15,19 @@ export function useTheme() {
   return useContext(ThemeContext)
 }
 
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') return 'dark'
+  const saved = localStorage.getItem('flow_theme') as Theme | null
+  if (saved) return saved
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark')
-  const [mounted, setMounted] = useState(false)
+  const [theme, setTheme] = useState<Theme>(getInitialTheme)
 
   useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('flow_theme') as Theme | null
-    if (saved) {
-      setTheme(saved)
-      document.documentElement.setAttribute('data-theme', saved)
-    } else {
-      document.documentElement.setAttribute('data-theme', 'dark')
-    }
-  }, [])
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -36,8 +35,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('flow_theme', next)
     document.documentElement.setAttribute('data-theme', next)
   }
-
-  if (!mounted) return <>{children}</>
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

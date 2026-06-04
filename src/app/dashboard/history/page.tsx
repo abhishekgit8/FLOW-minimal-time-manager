@@ -4,23 +4,51 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, Calendar, Trash2 } from 'lucide-react'
 
-interface Session { id: string; duration: number; mode: string; completed_at: string }
+interface Session { id: string; duration: number; completed_at: string }
+
+const PAGE_SIZE = 50
 
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [filter, setFilter] = useState<'all' | 'today' | 'week'>('all')
   const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) supabase.from('pomodoro_sessions').select('*').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100)
-        .then(({ data }) => { if (data) setSessions(data); setLoading(false) })
+      if (user) loadSessions(user.id, 0)
       else setLoading(false)
     })
   }, [])
 
-  const del = async (id: string) => { await supabase.from('pomodoro_sessions').delete().eq('id', id); setSessions(sessions.filter(s => s.id !== id)) }
+  const loadSessions = async (uid: string, offset: number) => {
+    if (offset > 0) setLoadingMore(true)
+    const { data } = await supabase.from('pomodoro_sessions')
+      .select('id, duration, completed_at')
+      .eq('user_id', uid)
+      .order('completed_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
+    if (data) {
+      if (offset === 0) setSessions(data)
+      else setSessions(prev => [...prev, ...data])
+      setHasMore(data.length === PAGE_SIZE)
+    }
+    setLoading(false)
+    setLoadingMore(false)
+  }
+
+  const loadMore = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) loadSessions(user.id, sessions.length)
+  }
+
+  const del = async (id: string) => {
+    if (!confirm('Delete this session? This cannot be undone.')) return
+    const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id)
+    if (!error) setSessions(sessions.filter(s => s.id !== id))
+  }
 
   const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const week = new Date(today); week.setDate(week.getDate() - week.getDay() + 1)
@@ -40,7 +68,17 @@ export default function HistoryPage() {
 
   const total = filtered.reduce((a, s) => a + (s.duration || 0), 0)
 
-  if (loading) return <p style={{ textAlign: 'center', padding: '40px 0', fontSize: 13, color: 'var(--text-dim)' }}>Loading...</p>
+  if (loading) return (
+    <div style={{ paddingBottom: 96 }}>
+      <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>History</h1>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ height: 48, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)', opacity: 0.5, animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
+        ))}
+      </div>
+      <style>{`@keyframes pulse { 0%,100% { opacity: 0.5 } 50% { opacity: 0.3 } }`}</style>
+    </div>
+  )
 
   return (
     <div style={{ paddingBottom: 96 }}>
@@ -98,6 +136,15 @@ export default function HistoryPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {hasMore && filter === 'all' && (
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <button onClick={loadMore} disabled={loadingMore}
+            style={{ padding: '8px 20px', borderRadius: 10, fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: loadingMore ? 'wait' : 'pointer' }}>
+            {loadingMore ? 'Loading...' : 'Load more'}
+          </button>
         </div>
       )}
     </div>

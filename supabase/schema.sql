@@ -5,6 +5,7 @@
 
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
 
 -- =============================================
 -- 1. TASKS TABLE (enhanced)
@@ -76,3 +77,26 @@ create index if not exists idx_tasks_done on tasks(user_id, done);
 create index if not exists idx_tasks_category on tasks(user_id, category);
 create index if not exists idx_sessions_user_id on pomodoro_sessions(user_id);
 create index if not exists idx_sessions_completed on pomodoro_sessions(user_id, completed_at);
+
+-- =============================================
+-- 4. USER CONNECTIONS TABLE (OAuth tokens)
+-- =============================================
+create table if not exists user_connections (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  provider text not null default 'google_calendar',
+  access_token text not null,
+  refresh_token text,
+  expires_at timestamptz,
+  created_at timestamptz default now(),
+  unique(user_id, provider)
+);
+
+alter table user_connections enable row level security;
+
+create policy "Users can view own connections" on user_connections for select using (auth.uid() = user_id);
+create policy "Users can insert own connections" on user_connections for insert with check (auth.uid() = user_id);
+create policy "Users can update own connections" on user_connections for update using (auth.uid() = user_id);
+create policy "Users can delete own connections" on user_connections for delete using (auth.uid() = user_id);
+
+create index if not exists idx_connections_user_id on user_connections(user_id);
