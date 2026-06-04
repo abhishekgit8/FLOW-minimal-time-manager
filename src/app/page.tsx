@@ -5,7 +5,7 @@ export default function Home() {
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: 16, paddingRight: 16, background: 'var(--bg)' }}>
       <div style={{ textAlign: 'center', maxWidth: 400 }}>
         <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 48, fontWeight: 200, letterSpacing: 8, marginBottom: 12, color: 'var(--text)' }}>Flow</h1>
+          <h1 style={{ fontSize: 40, fontWeight: 200, letterSpacing: 6, marginBottom: 12, color: 'var(--text)' }}>Flow — Time Manager</h1>
           <div style={{ width: 32, height: 1, background: 'var(--accent)', margin: '0 auto 20px' }} />
           <p style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--text-dim)' }}>
             A minimal time manager for maximum productivity.
