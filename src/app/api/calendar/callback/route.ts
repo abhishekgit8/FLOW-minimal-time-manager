@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { encryptToken } from '@/lib/crypto'
+
+function parseCookie(header: string | null, name: string): string | undefined {
+  if (!header) return undefined
+  const match = header.split(';').map(c => c.trim()).find(c => c.startsWith(`${name}=`))
+  return match?.split('=')[1]
+}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,9 +18,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/dashboard/settings?calendar=error`)
   }
 
-  const cookieStore = await cookies()
-  const expectedState = cookieStore.get('gcal_oauth_state')?.value
-  cookieStore.delete('gcal_oauth_state')
+  const cookieHeader = request.headers.get('cookie')
+  const expectedState = parseCookie(cookieHeader, 'gcal_oauth_state')
 
   if (!expectedState || state !== expectedState) {
     return NextResponse.redirect(`${origin}/dashboard/settings?calendar=error`)
@@ -64,5 +68,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/dashboard/settings?calendar=error`)
   }
 
-  return NextResponse.redirect(`${origin}/dashboard/settings?calendar=connected`)
+  const response = NextResponse.redirect(`${origin}/dashboard/settings?calendar=connected`)
+  response.headers.set('Set-Cookie', 'gcal_oauth_state=; path=/; max-age=0')
+  return response
 }

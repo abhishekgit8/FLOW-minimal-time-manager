@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 
 export async function GET() {
   const supabase = await createClient()
@@ -15,14 +14,6 @@ export async function GET() {
   const scope = 'https://www.googleapis.com/auth/calendar.events'
 
   const nonce = crypto.randomUUID()
-  const cookieStore = await cookies()
-  cookieStore.set('gcal_oauth_state', nonce, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 600,
-  })
 
   const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   googleAuthUrl.searchParams.set('client_id', clientId!)
@@ -33,5 +24,16 @@ export async function GET() {
   googleAuthUrl.searchParams.set('prompt', 'consent')
   googleAuthUrl.searchParams.set('state', nonce)
 
-  return NextResponse.redirect(googleAuthUrl.toString())
+  const html = `<!DOCTYPE html><html><head><title>Connecting...</title></head><body>
+<script>
+document.cookie = "gcal_oauth_state=${nonce}; path=/; max-age=600; SameSite=Lax";
+window.location.href = "${googleAuthUrl.toString()}";
+</script>
+<p>Redirecting to Google...</p>
+</body></html>`
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html' },
+  })
 }
