@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
+        <meta name="google-site-verification" content="r33BMvRgGpYPjr-ebE-VhiRMb-P07hJkSBXLSAsxqi0" />
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('flow_theme');if(!t)t=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',t)}catch(e){}})()` }} />
       </head>
       <body>
