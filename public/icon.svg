@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="28" fill="#0a0a0a"/>
-  <text x="64" y="76" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700" fill="#ffffff" letter-spacing="2">F</text>
-  <circle cx="90" cy="38" r="6" fill="#ffffff" opacity="0.3"/>
+  <!-- Timer ring -->
+  <circle cx="64" cy="58" r="32" fill="none" stroke="#f59e0b" stroke-width="5" stroke-dasharray="60 140" stroke-linecap="round" transform="rotate(-90 64 58)"/>
+  <!-- Clock hand -->
+  <line x1="64" y1="58" x2="64" y2="36" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <!-- Center dot -->
+  <circle cx="64" cy="58" r="3" fill="#f59e0b"/>
+  <!-- F letter -->
+  <text x="64" y="110" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="600" fill="#ffffff" letter-spacing="4">FLOW</text>
 </svg>
