@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <div style={{ width: '100%', maxWidth: 360 }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <Link href="/" style={{ fontSize: 22, fontWeight: 200, letterSpacing: 6, color: 'var(--text)', textDecoration: 'none' }}>FLOW</Link>
+        <Link href="/" style={{ fontSize: 22, fontWeight: 200, letterSpacing: 6, color: 'var(--text)', textDecoration: 'none' }}>Flow</Link>
         <p style={{ fontSize: 13, marginTop: 8, color: 'var(--text-dim)' }}>Sign in to your account</p>
       </div>
 
