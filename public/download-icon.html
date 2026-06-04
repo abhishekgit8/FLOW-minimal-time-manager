@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><title>Download Icon</title></head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#222;flex-direction:column;gap:20px;font-family:system-ui;color:white">
+<canvas id="c" width="128" height="128"></canvas>
+<a id="dl" download="icon.png" style="padding:10px 24px;background:#f59e0b;color:#0a0a0a;border-radius:8px;text-decoration:none;font-weight:600">Download icon.png</a>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+x.fillStyle='#0a0a0a';
+x.beginPath();x.roundRect(0,0,128,128,28);x.fill();
+x.fillStyle='#ffffff';
+x.font='bold 48px system-ui';
+x.textAlign='center';
+x.fillText('F',64,76);
+x.globalAlpha=0.3;
+x.beginPath();x.arc(90,38,6,0,Math.PI*2);x.fill();
+document.getElementById('dl').href=c.toDataURL('image/png');
+</script>
+</body>
+</html>
